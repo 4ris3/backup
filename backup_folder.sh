@@ -1,12 +1,12 @@
 #!/bin/bash
 
 create_backup() {
-    echo "Put folder path to backup:"
+    echo "Enter the full path of the folder to backup:"
     read BACKUP_FOLDER_PATH
 
     if [ ! -d "$BACKUP_FOLDER_PATH" ]; then
         echo "Wrong path"
-        return
+        exit 1
     fi
 
     echo "Check your PATH: $BACKUP_FOLDER_PATH (y/n):"
@@ -81,6 +81,46 @@ EOF_SCRIPT
     sudo chmod +x /backup/auto-backup/auto-backup.sh
 }
 
+create_systemd_files() {
+touch /tmp/auto-backup.service
+touch /tmp/auto-backup.timer
+
+cat > /tmp/auto-backup.service << EOF_SERVICE
+[Unit]
+Description="Auto backup service"
+
+[Service]
+ExecStart=/backup/auto-backup/auto-backup.sh
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF_SERVICE
+
+sudo mv /tmp/auto-backup.service /etc/systemd/system/auto-backup.service
+
+cat > /tmp/auto-backup.timer << EOF_TIMER
+[Unit]
+Description=Timer for auto backup service
+
+[Timer]
+OnCalendar=*-*-* 08:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF_TIMER
+
+sudo mv /tmp/auto-backup.timer /etc/systemd/system/auto-backup.timer
+
+sudo systemctl enable auto-backup.service
+sudo systemctl enable auto-backup.timer
+sudo systemctl start auto-backup.service
+sudo systemctl start auto-backup.timer
+
+}
+
 run_auto_backup() {
     sudo bash /backup/auto-backup/auto-backup.sh
 }
@@ -94,5 +134,6 @@ else
     sudo touch "$AUTO_BACKUP_FOLDER_PATH/auto-backup-list.txt"
     create_backup
     create_auto_backup
+    create_systemd_files
     run_auto_backup
 fi
