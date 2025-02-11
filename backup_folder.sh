@@ -1,54 +1,84 @@
 #!/bin/bash
 
-create_backup() {
-    echo "Enter the full path of the folder to backup:"
-    read BACKUP_FOLDER_PATH
+if [[ "$1" == "-help" || "$1" == "--help" ]]; then
+    echo
+    echo "First usage: ./backup_folder.sh [PATH] [-auto]"
+    echo "Next uses: backup_folder.sh [PATH] [-auto]"
+    echo ""
+    echo "Arguments:"
+    echo "  [PATH]    - The path to the directory you want to archive."
+    echo "  -auto     - Optional argument that enables automatic backup mode."
+    echo
+    echo ALWAYS USE FULL PATH IF YOU WANT USE -auto FLAG
+    echo
+    exit 0
+fi
 
-    if [ ! -d "$BACKUP_FOLDER_PATH" ]; then
+BACKUP_FOLDER_PATH="$1"
+SECOND_ARGUMENT="$2"
+BACKUP_DATE=$(date +'%d-%m-%Y-%R')
+FOLDER_NAME=$(basename "$BACKUP_FOLDER_PATH")
+FULL_BACKUP_PATH="/backup/$FOLDER_NAME/$FOLDER_NAME-$BACKUP_DATE"
+
+
+create_backup() {
+    if [ -z "$BACKUP_FOLDER_PATH" ]; then
+        echo "No path provided, enter it manually:"
+        read BACKUP_FOLDER_PATH
+        echo "Check your PATH: $BACKUP_FOLDER_PATH (y/n):"
+        read YES_NO_CHECK_PATH
+        YES_NO_CHECK_PATH=$(echo "$YES_NO_CHECK_PATH" | tr '[:upper:]' '[:lower:]')
+        if [ "$YES_NO_CHECK_PATH" = "y" ]; then
+            if [ -d "$BACKUP_FOLDER_PATH" ]; then
+                echo "Directory exists, now we made some magic..."
+                INTERACT_FOLDER_NAME=$(basename "$BACKUP_FOLDER_PATH")
+                INTERACT_FULL_BACKUP_PATH="/backup/$INTERACT_FOLDER_NAME/$INTERACT_FOLDER_NAME-$BACKUP_DATE"
+                    if [ -d "$INTERACT_FULL_BACKUP_PATH" ]; then
+                        echo "Backup already exists. Wait one minute before you create next backup."
+                    else
+                        sudo mkdir -p "$INTERACT_FULL_BACKUP_PATH"
+                        sudo cp -r "$BACKUP_FOLDER_PATH"/* "$INTERACT_FULL_BACKUP_PATH"
+                        echo "Done! $INTERACT_FULL_BACKUP_PATH"
+                        echo
+                        echo "Add a folder to auto-backup? (y/n)"
+                        read YES_NO_AUTO_BACKUP
+                        YES_NO_AUTO_BACKUP=$(echo "$YES_NO_AUTO_BACKUP" | tr '[:upper:]' '[:lower:]')
+                            if [ "$YES_NO_AUTO_BACKUP" = "y" ]; then
+                                if grep -Fxq "$BACKUP_FOLDER_PATH" /backup/auto-backup/auto-backup-list.txt; then
+                                    echo "Folder is already in the auto-backup list."
+                                else
+                                    echo "$BACKUP_FOLDER_PATH" | sudo tee -a /backup/auto-backup/auto-backup-list.txt > /dev/null
+                                    echo "Folder added to auto-backup list."
+                                fi
+                            else
+                                echo "Copy that!"
+                            fi
+                        fi
+                    fi
+                elif [ "$YES_NO_CHECK_PATH" = "n" ]; then
+                    echo "Canceled"
+        else
+            echo "Invalid input. Please enter 'y' or 'n'"
+        fi
+        
+    elif [ ! -d "$BACKUP_FOLDER_PATH" ]; then
         echo "Wrong path"
         exit 1
-    fi
-
-    echo "Check your PATH: $BACKUP_FOLDER_PATH (y/n):"
-    read YES_NO_CHECK_PATH
-    YES_NO_CHECK_PATH=$(echo "$YES_NO_CHECK_PATH" | tr '[:upper:]' '[:lower:]')
-
-    BACKUP_DATE=$(date +'%d-%m-%Y-%R')
-
-    if [ "$YES_NO_CHECK_PATH" = "y" ]; then
-        if [ -d "$BACKUP_FOLDER_PATH" ]; then
-            echo "Directory exists, now we made some magic..."
-            FOLDER_NAME=$(basename "$BACKUP_FOLDER_PATH")
-            FULL_BACKUP_PATH="/backup/$FOLDER_NAME/$FOLDER_NAME-$BACKUP_DATE"
-
-            if [ -d "$FULL_BACKUP_PATH" ]; then
-                echo "Backup already exists. Wait one minute before you create next backup."
-            else
-                sudo mkdir -p "$FULL_BACKUP_PATH"
-                sudo cp -r "$BACKUP_FOLDER_PATH"/* "$FULL_BACKUP_PATH"
-                echo "Done! $FULL_BACKUP_PATH"
-                echo
-
-                echo "Add a folder to auto-backup? (y/n)"
-                read YES_NO_AUTO_BACKUP
-                YES_NO_AUTO_BACKUP=$(echo "$YES_NO_AUTO_BACKUP" | tr '[:upper:]' '[:lower:]')
-
-                if [ "$YES_NO_AUTO_BACKUP" = "y" ]; then
-                    if grep -Fxq "$BACKUP_FOLDER_PATH" /backup/auto-backup/auto-backup-list.txt; then
-                        echo "Folder is already in the auto-backup list."
-                    else
-                        echo "$BACKUP_FOLDER_PATH" | sudo tee -a /backup/auto-backup/auto-backup-list.txt > /dev/null
-                        echo "Folder added to auto-backup list."
-                    fi
+    else
+        if [ -d "$FULL_BACKUP_PATH" ]; then
+            echo "Backup already exists. Wait one minute before you create next backup."
+        else
+            sudo mkdir -p "$FULL_BACKUP_PATH"
+            sudo cp -r "$BACKUP_FOLDER_PATH"/* "$FULL_BACKUP_PATH"
+            if [ "$SECOND_ARGUMENT" = "-auto" ]; then
+                if grep -Fxq "$BACKUP_FOLDER_PATH" /backup/auto-backup/auto-backup-list.txt; then
+                    echo "Folder is already in the auto-backup list."
                 else
-                    echo "Copy that!"
+                    echo "$BACKUP_FOLDER_PATH" | sudo tee -a /backup/auto-backup/auto-backup-list.txt > /dev/null
+                    echo "Folder added to auto-backup list."
                 fi
             fi
         fi
-    elif [ "$YES_NO_CHECK_PATH" = "n" ]; then
-        echo "Canceled"
-    else
-        echo "Invalid input. Please enter 'y' or 'n'"
     fi
 }
 
@@ -65,10 +95,10 @@ while IFS= read -r line; do
     fi
 
     if [[ -d "\$line" ]]; then
-        FOLDER_NAME=\$(basename "\$line")
-        BACKUP_FOLDER="/backup/\$FOLDER_NAME/\$FOLDER_NAME-\$DATE.auto"
-        sudo mkdir -p "\$BACKUP_FOLDER"
-        sudo cp -r "\$line"/* "\$BACKUP_FOLDER" 2>/dev/null
+        AUTO_FOLDER_NAME=\$(basename "\$line")
+        AUTO_BACKUP_FOLDER="/backup/\$AUTO_FOLDER_NAME/\$AUTO_FOLDER_NAME-\$DATE.auto"
+        sudo mkdir -p "\$AUTO_BACKUP_FOLDER"
+        sudo cp -r "\$line"/* "\$AUTO_BACKUP_FOLDER" 2>/dev/null
         echo "Backup completed for: \$line"
     else
         echo "Directory does not exist: \$line"
@@ -136,4 +166,6 @@ else
     create_auto_backup
     create_systemd_files
     run_auto_backup
+    sudo chmod +x backup_folder.sh
+    sudo mv backup_folder.sh /usr/local/bin/backup_folder.sh
 fi
