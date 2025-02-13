@@ -16,7 +16,8 @@ fi
 
 BACKUP_FOLDER_PATH="$1"
 SECOND_ARGUMENT="$2"
-BACKUP_DATE=$(date +'%d-%m-%Y-%R')
+BACKUP_DATE=$(date +'%d-%m-%Y-%H-%M')
+PARENT_DIR=$(dirname "$BACKUP_FOLDER_PATH")
 FOLDER_NAME=$(basename "$BACKUP_FOLDER_PATH")
 FULL_BACKUP_PATH="/backup/$FOLDER_NAME/$FOLDER_NAME-$BACKUP_DATE"
 
@@ -31,14 +32,15 @@ create_backup() {
         if [ "$YES_NO_CHECK_PATH" = "y" ]; then
             if [ -d "$BACKUP_FOLDER_PATH" ]; then
                 echo "Directory exists, now we made some magic..."
+                INTERACT_PARENT_DIR=$(dirname "$BACKUP_FOLDER_PATH")
                 INTERACT_FOLDER_NAME=$(basename "$BACKUP_FOLDER_PATH")
                 INTERACT_FULL_BACKUP_PATH="/backup/$INTERACT_FOLDER_NAME/$INTERACT_FOLDER_NAME-$BACKUP_DATE"
                     if [ -d "$INTERACT_FULL_BACKUP_PATH" ]; then
                         echo "Backup already exists. Wait one minute before you create next backup."
                     else
-                        sudo mkdir -p "$INTERACT_FULL_BACKUP_PATH"
-                        sudo cp -r "$BACKUP_FOLDER_PATH"/* "$INTERACT_FULL_BACKUP_PATH"
-                        echo "Done! $INTERACT_FULL_BACKUP_PATH"
+                        sudo mkdir -p /backup/$INTERACT_FOLDER_NAME/
+                        sudo tar -cJf $INTERACT_FULL_BACKUP_PATH.tar.xz -C $INTERACT_PARENT_DIR $INTERACT_FOLDER_NAME
+                        echo "Done! $INTERACT_FULL_BACKUP_PATH.tar.xz"
                         echo
                         echo "Add a folder to auto-backup? (y/n)"
                         read YES_NO_AUTO_BACKUP
@@ -68,8 +70,8 @@ create_backup() {
         if [ -d "$FULL_BACKUP_PATH" ]; then
             echo "Backup already exists. Wait one minute before you create next backup."
         else
-            sudo mkdir -p "$FULL_BACKUP_PATH"
-            sudo cp -r "$BACKUP_FOLDER_PATH"/* "$FULL_BACKUP_PATH"
+            sudo mkdir -p /backup/$FOLDER_NAME/
+            sudo tar -cJf $FULL_BACKUP_PATH.tar.xz -C $PARENT_DIR $FOLDER_NAME
             if [ "$SECOND_ARGUMENT" = "-auto" ]; then
                 if grep -Fxq "$BACKUP_FOLDER_PATH" /backup/auto-backup/auto-backup-list.txt; then
                     echo "Folder is already in the auto-backup list."
@@ -86,7 +88,7 @@ create_auto_backup() {
     cat > /tmp/auto-backup.sh << EOF_SCRIPT
 #!/bin/bash
 BACKUP_TXT_FILE="/backup/auto-backup/auto-backup-list.txt"
-DATE=\$(date +'%d-%m-%Y-%R')
+DATE=\$(date +'%d-%m-%Y-%H-%M')
 
 while IFS= read -r line; do
     if [[ -z "\$line" ]]; then
@@ -95,13 +97,13 @@ while IFS= read -r line; do
     fi
 
     if [[ -d "\$line" ]]; then
+        AUTO_PARENT_DIR=\$(dirname "\$line")
         AUTO_FOLDER_NAME=\$(basename "\$line")
-        AUTO_BACKUP_FOLDER="/backup/\$AUTO_FOLDER_NAME/\$AUTO_FOLDER_NAME-\$DATE.auto"
-        sudo mkdir -p "\$AUTO_BACKUP_FOLDER"
-        sudo cp -r "\$line"/* "\$AUTO_BACKUP_FOLDER" 2>/dev/null
-        echo "Backup completed for: \$line"
+        AUTO_FULL_BACKUP_FOLDER="/backup/\$AUTO_FOLDER_NAME/\$AUTO_FOLDER_NAME-\$DATE-auto"
+        sudo mkdir -p "/backup/\$AUTO_FOLDER_NAME/"
+        sudo tar -cJf "\$AUTO_FULL_BACKUP_FOLDER.tar.xz" -C "\$AUTO_PARENT_DIR" "\$AUTO_FOLDER_NAME"
     else
-        echo "Directory does not exist: \$line"
+        echo "\$DATE Directory does not exist: \$line " | sudo tee -a /backup/auto-backup/log-auto-backup.txt > /dev/null
     fi
 done < "\$BACKUP_TXT_FILE"
 
